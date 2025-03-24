@@ -1,0 +1,26 @@
+trigger:
+- main  # Runs when the main branch is updated
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: Build
+  jobs:
+  - job: Build
+    steps:
+    - task: Docker@2
+      inputs:
+        command: 'buildAndPush'
+        repository: 'hpfaacr.azurecr.io/hpfaapp'
+        dockerfile: '**/Dockerfile'
+        containerRegistry: 'hpfaacr'
+
+- stage: Deploy
+  jobs:
+  - job: Deploy
+    steps:
+    - script: |
+        az aks get-credentials --resource-group PRANAV --name hpfa
+        kubectl apply -f k8s/deployment.yaml
+      displayName: 'Deploy to AKS'
