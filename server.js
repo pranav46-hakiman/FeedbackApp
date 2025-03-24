@@ -3,38 +3,63 @@ const bodyParser = require("body-parser");
 const mssql = require("mssql");
 const cors = require("cors");
 const Sentiment = require("sentiment");
+const nodemailer = require("nodemailer");
 
 const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
-//  Database Configuration
+// Database Configuration
 const config = {
   user: 'DB1',
   password: 'Whitebeard@23',
   server: 'hpfa1.database.windows.net',
   database: 'HPFA_DB1', 
   options: {
-      encrypt: true,
-      enableArithAbort: true
+    encrypt: true,
+    enableArithAbort: true
   }
 };
 
+// Email Configuration for Alerts
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'your-email@gmail.com', // Replace with your email
+    pass: 'your-app-specific-password' // Replace with app-specific password
+  }
+});
 
 let pool;
 
 async function connectToDatabase() {
   try {
     pool = await mssql.connect(config);  
-    console.log(" Database connected successfully!");
+    console.log("Database connected successfully!");
   } catch (err) {
-    console.error(" Database connection failed:", err);
+    console.error("Database connection failed:", err);
     process.exit(1); 
   }
 }
 
-
 const sentiment = new Sentiment();
+
+// Function to send email alert for negative feedback
+async function sendNegativeFeedbackAlert(feedback, name, email) {
+  const mailOptions = {
+    from: 'get.pranavk23@gmail.com',
+    to: 'getpranav2@gmail.com', // Replace with admin email
+    subject: 'Negative Feedback Alert',
+    text: `Negative feedback received from ${name} (${email}):\n\n"${feedback}"`
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Negative feedback alert email sent successfully");
+  } catch (error) {
+    console.error("Error sending alert email:", error);
+  }
+}
 
 // Feedback submission route
 app.post("/feedback", async (req, res) => {
@@ -80,6 +105,11 @@ app.post("/feedback", async (req, res) => {
       .input("SentimentLabel", mssql.NVarChar, sentimentLabel)
       .query(query);
 
+    // Check for negative feedback and send alert
+    if (sentimentLabel === "Negative") {
+      await sendNegativeFeedbackAlert(feedback, name, email);
+    }
+
     res.status(201).send({
       success: true,
       message: "Feedback saved successfully.",
@@ -93,7 +123,7 @@ app.post("/feedback", async (req, res) => {
   }
 });
 
-//  Fetch all feedback route
+// Fetch all feedback route
 app.get("/all-feedback", async (req, res) => {
   try {
     // Ensure DB Connection is Active
@@ -109,14 +139,13 @@ app.get("/all-feedback", async (req, res) => {
 
     res.status(200).json(result.recordset);
   } catch (err) {
-    console.error(" Error fetching feedback:", err);
+    console.error("Error fetching feedback:", err);
     res.status(500).send({
       success: false,
       message: "Error fetching feedback.",
     });
   }
 });
-
 
 async function startServer() {
   await connectToDatabase();
